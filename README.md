@@ -1,351 +1,99 @@
 # InternOps
 
-Enterprise Workforce Management and Intern Operations Platform
+Enterprise Workforce Management & Intern Operations Platform
 
-InternOps is a production-grade workforce management system built for structured intern operations. It centralizes attendance, performance tracking, social task management, proof verification, meetings, notifications, reporting, and audit logging while enforcing strict hierarchical access control.
+[![Node.js](https://img.shields.io/badge/node-%E3%80%8E18.0.0-brightgreen.svg)](https://nodejs.org/)
+[![PostgreSQL](https://img.shields.io/badge/postgres-%E3%80%8E14.0-blue.svg)](https://www.postgresql.org/)
+[![Fastify](https://img.shields.io/badge/fastify-4.x-000000.svg))(https://www.fastify.io/)
+[![React](https://img.shields.io/badge/react-18.x-61DAFB.svg)](https://react.dev/)
+[![License](https://img.shields.io/badge/license-Proprietary-blue.svg)](LICENSE)
 
-The platform follows a security-first architecture with Role-Based Access Control (RBAC), ownership validation, JWT authentication, refresh token rotation, Argon2 password hashing, audit logging, and PostgreSQL-backed persistence.
+Production-grade workforce management with five-tier hierarchy, immutable records, proof-verified tasks, meetings, analytics, audit logs, and full security. Built on Node.js + Fastify + PostgreSQL (raw SQL) with a React + Vite frontend.
 
----
+## Key Features
 
-## Executive Summary
+- **Hierarchy**: Admin → Senior TL → TL → Captain → Intern; recursive ownership
+- **Auth**: JWT access/refresh tokens, Argon2id, brute-force lockout, password reset
+- **Attendance**: single/bulk, monthly stats, remarks, immutable records
+- **Ratings**: historical, never overwritten; only direct manager can rate
+- **Social Tasks**: create tasks, upload screenshot proof, verify, auto-delete 24h
+- **Meetings**: schedule with attendees, hierarchy-based visibility
+- **Notifications**: in-app alerts, pagination, read/unread, bulk actions
+- **Reports & Analytics**: attendance summaries, trends, task completion, CSV export
+- **Sessions**: view/revoke own; admin can revoke any user's sessions
+- **Audit**: immutable logs with old/new values, IP, user-agent for every action
+- **Security**: Helmet, CORS, CSRF, rate limiting, input sanitisation, soft deletes
 
-InternOps manages the complete lifecycle of workforce operations through a hierarchical structure:
+## Technology
 
-Admin → Senior TL → TL → Captain → Intern
+| Layer     | Technology |
+|------------|------------|
+| Backend   | Node.js 18+, Fastify v4  |
+| Database  | PostgreSQL (raw SQL via `pg`)  |
+| Frontend  | React 18, Vite 5, TailwindCSS 3, Axios  |
+| Auth      | JWT, Argon2id, Zod  |
+| State     | Zustand, TanStack Query  |
+| Security  | Helmet, CORS, CSRF, Rate Limiting  |
+| Docs      | Swagger (OpenAPI)  |
 
-The platform ensures that users can only access resources that belong to their authorized hierarchy chain. Every sensitive action is validated, logged, and auditable.
+## Database
 
----
+13 tables: users, departments, attendance, ratings, social_tasks,
+proof_submissions, notifications, meetings, meeting_attendees, audit_logs,
+refresh_tokens, password_reset_tokens, login_attempts.
 
-## Core Capabilities
+UUID PKs, foreign keys, indexes, soft deletes, JSON audit, transactions.
 
-| Module | Description |
-|----------|-------------|
-| Authentication | JWT authentication with refresh token rotation |
-| User Management | User lifecycle, profile management, account control |
-| Hierarchy Management | Team structure and reporting chain management |
-| Attendance | Single and bulk attendance tracking |
-| Ratings | Historical performance ratings |
-| Social Tasks | Task assignment and completion workflow |
-| Proof Verification | Screenshot-based proof validation |
-| Meetings | Team meeting scheduling and management |
-| Notifications | In-app notification system |
-| Analytics | Attendance and performance insights |
-| Reports | Exportable operational reports |
-| Sessions | Active session management and revocation |
-| Audit Logging | Immutable activity tracking |
-| Security | RBAC, ownership checks, CSRF, rate limiting |
+## API
 
----
-
-## System Architecture
-
-```text
-┌──────────────────────────────────────────────┐
-│                  Frontend                    │
-│          React + Vite + TailwindCSS          │
-└──────────────────────┬───────────────────────┘
-                       │
-                       │ REST API
-                       ▼
-┌──────────────────────────────────────────────┐
-│                Fastify Backend               │
-├──────────────────────────────────────────────┤
-│ Authentication                              │
-│ Authorization (RBAC)                        │
-│ Ownership Validation                        │
-│ Attendance Module                           │
-│ Ratings Module                              │
-│ Social Tasks Module                         │
-│ Meetings Module                             │
-│ Reports & Analytics                         │
-│ Audit Logging                               │
-└──────────────────────┬───────────────────────┘
-                       │
-                       ▼
-┌──────────────────────────────────────────────┐
-│                 PostgreSQL                   │
-│            Raw SQL + pg Driver              │
-└──────────────────────────────────────────────┘
-
-Optional:
-┌──────────────────────────────────────────────┐
-│               Redis (Upstash)               │
-│      Refresh Token & Session Storage        │
-└──────────────────────────────────────────────┘
-```
-
----
-
-## Technology Stack
-
-| Layer | Technology |
-|---------|------------|
-| Backend | Node.js, Fastify |
-| Frontend | React, Vite, TailwindCSS |
-| Database | PostgreSQL |
-| Query Layer | Raw SQL using pg |
-| Authentication | JWT, Argon2 |
-| Validation | Zod |
-| State Management | Zustand |
-| Data Fetching | TanStack Query |
-| API Client | Axios |
-| Documentation | Swagger/OpenAPI |
-| Cache | Redis (Optional) |
-| DevOps | Git, GitHub, PowerShell |
-
----
-
-## Security Architecture
-
-InternOps follows a defense-in-depth model.
-
-### Authentication
-
-- JWT Access Tokens
-- Refresh Token Rotation
-- Argon2 Password Hashing
-- Session Revocation
-
-### Authorization
-
-- Role-Based Access Control
-- Ownership Validation
-- Hierarchical Permission Enforcement
-
-### Protection Layers
-
-- Helmet Security Headers
-- CSRF Protection
-- Rate Limiting
-- Input Sanitization
-- Brute Force Prevention
-- Audit Logging
-
----
-
-## Role Hierarchy
-
-| Role | Access Level |
-|--------|-------------|
-| Admin | Full platform control |
-| Senior TL | Department management |
-| TL | Team management |
-| Captain | Direct intern supervision |
-| Intern | Self-service access |
-
-Hierarchy ownership is enforced recursively to prevent unauthorized access.
-
----
-
-## Database Overview
-
-### Primary Tables
-
-| Table | Purpose |
-|---------|---------|
-| users | User accounts |
-| departments | Department records |
-| attendance | Daily attendance |
-| ratings | Performance ratings |
-| social_tasks | Task assignments |
-| proof_submissions | Uploaded proofs |
-| notifications | User notifications |
-| meetings | Meeting schedules |
-| meeting_attendees | Meeting participants |
-| audit_logs | Audit records |
-| refresh_tokens | Session tokens |
-| password_reset_tokens | Password resets |
-| login_attempts | Security tracking |
-
-### Design Principles
-
-- UUID Primary Keys
-- Foreign Key Constraints
-- Indexed Queries
-- Soft Deletes
-- Transaction Support
-- JSONB Audit Records
-
----
-
-## Major Modules
-
-### Authentication
-Login, logout, refresh token rotation, password reset.
-
-### Users
-User management, profile updates, account lifecycle.
-
-### Attendance
-Single attendance, bulk attendance, statistics.
-
-### Ratings
-Historical ratings with manager validation.
-
-### Social Tasks
-Task creation, assignment, proof submission, verification.
-
-### Meetings
-Meeting scheduling and attendee management.
-
-### Analytics
-Attendance trends, top performers, operational insights.
-
-### Reports
-CSV exports and summary reports.
-
-### Sessions
-Device tracking and session revocation.
-
-### Audit
-Immutable logging of sensitive actions.
-
----
-
-## Project Structure
-
-```text
-InternOps/
-│
-├── backend/
-│   ├── migrations/
-│   ├── seeds/
-│   ├── src/
-│   │   ├── config/
-│   │   ├── middleware/
-│   │   ├── modules/
-│   │   ├── services/
-│   │   ├── utils/
-│   │   └── app.js
-│   └── package.json
-│
-├── frontend/
-│   ├── src/
-│   │   ├── components/
-│   │   ├── pages/
-│   │   ├── store/
-│   │   └── lib/
-│   └── package.json
-│
-├── docs/
-├── scripts/
-└── README.md
-```
-
----
-
-## Environment Variables
-
-| Variable | Purpose |
-|------------|----------|
-| DATABASE_URL | PostgreSQL connection |
-| JWT_SECRET | JWT signing secret |
-| PORT | Application port |
-| NODE_ENV | Environment mode |
-| CORS_ORIGIN | Allowed frontend origin |
-| UPSTASH_REDIS_REST_URL | Redis URL |
-| UPSTASH_REDIS_REST_TOKEN | Redis Token |
-| UPTOSKILLS_BASE_URL | Future integration |
-| UPTOSKILLS_API_KEY | Future integration |
-
----
+| Module        | Prefix              | Purpose |
+|----------------|-----------------------|---------|
+| Auth          | /api/auth           | Login, register, refresh, logout, password reset, CSRF |
+| Users         | /api/users          | CRUD, profile, password, suspend/activate |
+| Departments   | /api/departments    | Create & list |
+| Hierarchy     | /api/hierarchy      | Direct reports, full team, upward chain |
+| Attendance    | /api/attendance     | Mark, bulk, view, monthly stats |
+| Ratings       | /api/ratings        | Submit (manager), view history |
+| Tasks         | /api/tasks          | Create, list social tasks |
+| Proofs        | /api/proofs         | Submit (intern), verify (captain+) |
+| Notifications | /api/notifications  | List, mark read, delete, bulk read |
+| Audit         | /api/audit          | View logs (admin only) |
+| Uploads       | /api/uploads       | Avatar upload |
+| Analytics     | /api/analytics      | Overview, dept attendance, top performers |
+| Meetings      | /api/meetings       | CRUD, attendees |
+| Sessions      | /api/sessions       | List own, revoke, admin revoke |
+| Reports       | /api/reports        | Summaries, task completion, CSV export |
+| Uptoskills    | /api/uptoskills     | Placeholder for integration |
 
 ## Quick Start
 
-### Clone Repository
+```bash
+git clone https://github.com/rajat-wyrm/InternOps.git
+cd InternOps
+cd backend && npm install && cd ../frontend && npm install
+cp backend/.env.example backend/.env   # edit with your config
+cd backend && npm run migrate && npm run seed
+npm run dev                           # backend on :5000
+cd ../frontend && npm run dev         # frontend on :5173
+```
 
-    git clone https://github.com/rajat-wyrm/InternOps.git
-    cd InternOps
+Swagger UI: `http://localhost:5000/docs` – admin@internops.com / Admin@123
 
-### Install Dependencies
+## Environment
 
-    cd backend
-    npm install
-
-    cd ../frontend
-    npm install
-
-### Configure Environment
-
-    copy .env.example .env
-
-Update environment variables.
-
-### Run Database
-
-    cd backend
-    npm run migrate
-    npm run seed
-
-### Start Backend
-
-    npm run dev
-
-### Start Frontend
-
-    cd frontend
-    npm run dev
-
-Backend:
-http://localhost:5000
-
-Frontend:
-http://localhost:5173
-
-Swagger:
-http://localhost:5000/docs
-
----
+`DATABASE_URL`, `JWT_SECRET`, `PORT`, `NODE_ENV`, `CORS_ORIGIN`, `UPSTASH_REDIS_REST_URL`, `UPTOSKILLS_BASE_URL`, `UPTOSKILLS_API_KEYc
 
 ## Deployment
 
-Recommended Production Stack
-
-- Ubuntu Server
-- Nginx Reverse Proxy
-- PM2 Process Manager
-- PostgreSQL
-- Redis
-- SSL/TLS Certificates
-
-Example:
-
-    pm2 start backend/src/app.js --name internops
-    pm2 save
-
----
-
-## Future Roadmap
-
-- Uptoskills API Integration
-- Real-Time Notifications
-- Mobile Application
-- Advanced Analytics Dashboard
-- S3 Object Storage
-- Multi-Tenant Architecture
-- Organization Management
-- Automated Reporting
-
----
+```bash
+NODE_ENV=production npm start
+pm2 start backend/src/app.js --name internops   # with PM2 + Nginx
+```
 
 ## License
 
-Proprietary Software
-
-All rights reserved.
-
-Unauthorized use, distribution, or modification is prohibited.
-
----
+Proprietary. All rights reserved.
 
 ## Maintainer
 
-Rajat Wyrm
-
-GitHub:
-https://github.com/rajat-wyrm
-
-Repository:
-https://github.com/rajat-wyrm/InternOps
+**Rajat Wyrm** – [GitHub](https://github.com/rajat-wyrm)
