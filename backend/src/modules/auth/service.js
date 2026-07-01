@@ -157,7 +157,14 @@ async function refreshTokens(token, ip) {
     user: publicUser(user),
   };
 }
-async function logout(token, authenticatedUserId, accessJti, accessExp, ip, userAgent) {
+async function logout(
+  token,
+  authenticatedUserId,
+  accessJti,
+  accessExp,
+  ip,
+  userAgent
+) {
   let decoded;
 
   try {
@@ -177,7 +184,7 @@ async function logout(token, authenticatedUserId, accessJti, accessExp, ip, user
   if (ttl > 0) {
     await blacklistAccessToken(accessJti, ttl);
   }
-  
+
   await createAuditLog({
     userId: authenticatedUserId,
     action: 'LOGOUT',

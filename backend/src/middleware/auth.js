@@ -1,5 +1,8 @@
 const { verifyAccessToken } = require('../utils/tokens');
-const { isAccessTokenBlacklisted, blacklistAccessToken } = require("../config/redis");
+const {
+  isAccessTokenBlacklisted,
+  blacklistAccessToken,
+} = require('../config/redis');
 
 async function authMiddleware(request, reply) {
   const auth = request.headers.authorization;

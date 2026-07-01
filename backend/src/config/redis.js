@@ -73,7 +73,7 @@ async function blacklistAccessToken(jti, ttl) {
   const client = await getRedisClient();
   if (!client) return;
 
-  await client.set(`blacklist:${jti}`, "1", {
+  await client.set(`blacklist:${jti}`, '1', {
     EX: ttl,
   });
 }
@@ -85,4 +85,9 @@ async function isAccessTokenBlacklisted(jti) {
   return (await client.exists(`blacklist:${jti}`)) === 1;
 }
 
-module.exports = { getRedisClient, getRedisStatus, blacklistAccessToken, isAccessTokenBlacklisted };
+module.exports = {
+  getRedisClient,
+  getRedisStatus,
+  blacklistAccessToken,
+  isAccessTokenBlacklisted,
+};
