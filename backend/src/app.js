@@ -277,24 +277,34 @@ const start = async () => {
   }
 };
 
+const SHUTDOWN_TIMEOUT = 20000;
+
 const gracefulShutdown = async (signal) => {
   console.log(`Received ${signal}, shutting down gracefully...`);
 
+  const forceShutdown = setTimeout(() => {
+    console.error('Shutdown timed out. Forcing exit.');
+    process.exit(1);
+  }, SHUTDOWN_TIMEOUT);
+
   try {
-    // stop accepting new requests + finish in-flight requests
+    // Stop accepting new requests and finish in-flight requests
     await app.close();
 
-    // close DB pool connections
+    // Close database pool connections
     await pool.end();
+
+    clearTimeout(forceShutdown);
 
     console.log('Cleanup completed. Exiting now.');
     process.exit(0);
   } catch (err) {
+    clearTimeout(forceShutdown);
+
     console.error('Error during shutdown:', err);
     process.exit(1);
   }
 };
-
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
