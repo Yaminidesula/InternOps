@@ -313,8 +313,6 @@ async function routes(fastify) {
 
       reply.clearCookie('refreshToken', { path: '/api/auth/refresh' });
 
-    
-
       rotateAndSetCsrf(req, reply, null);
       return { message: 'Logged out' };
     }
