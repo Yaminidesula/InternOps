@@ -42,6 +42,23 @@ async function isTaskAssignedToUser(taskId, userId) {
   );
   return res.rowCount > 0;
 }
+
+  const res = await pool.query(
+    `SELECT email
+     FROM users
+     WHERE role IN ('INTERN', 'CAPTAIN')
+
+       AND email IS NOT NULL
+     ORDER BY id
+     LIMIT $1 OFFSET $2`,
+    [limit, offset]
+
+  );
+
+  return res.rows.map((row) => row.email);
+}
+
+
 async function getAllInternEmails(limit = 500, offset = 0) {
   const res = await pool.query(
     `SELECT email
@@ -63,6 +80,7 @@ async function getInternEmailCount() {
      WHERE role IN ('INTERN', 'CAPTAIN')
        AND email IS NOT NULL`
   );
+
   return res.rows[0].count;
 }
 async function getTasks(filters, userId, userRole) {
@@ -280,10 +298,12 @@ module.exports = {
   verifyProof,
   getProofsByTask,
   getProofsByIntern,
+
   getProof,
   deleteProof,
   getProofImage,
   deleteProofImage,
   getAllInternEmails,
   getInternEmailCount,
+
 };

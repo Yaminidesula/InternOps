@@ -1,4 +1,4 @@
-const {
+﻿const {
   sanitizationMiddleware: sanitize,
 } = require('../../middleware/sanitize');
 const auth = require('../../middleware/auth');
@@ -86,9 +86,34 @@ async function routes(fastify) {
 
       if (filesData.length === 0)
         return reply.status(400).send({ error: 'Image file required' });
+const task_id = data.fields?.task_id?.value;
 
-      if (filesData.length > 5)
-        return reply.status(400).send({ error: 'Maximum 5 images allowed' });
+if (!task_id) {
+  return reply.status(400).send({ error: 'task_id required' });
+}
+
+if (filesData.length > 5) {
+  return reply
+    .status(400)
+    .send({ error: 'Maximum 5 images allowed' });
+}
+
+      // Validate MIME type and extension (declared values)
+      const ext = path.extname(data.filename).toLowerCase();
+      if (
+        !ALLOWED_MIMES.includes(data.mimetype) ||
+        !ALLOWED_EXTS.includes(ext)
+      ) {
+        return reply
+          .status(400)
+          .send({ error: 'Only JPEG, PNG, GIF images are allowed' });
+      }
+      if (data.file.truncated) {
+        return reply.status(400).send({ error: 'File size exceeds limit' });
+      }
+
+      // Buffer the upload to validate contents, then persist
+     
 
       // Authorization: the intern must actually be assigned to the task
       const isAssigned = await repo.isTaskAssignedToUser(task_id, req.user.id);
