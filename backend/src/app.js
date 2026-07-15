@@ -367,8 +367,6 @@ const gracefulShutdown = async (signal) => {
 
     // Close database pool connections
     await pool.end();
-
-
   } catch (err) {
     app.log.error({ err }, 'Error during shutdown');
 
@@ -376,7 +374,7 @@ const gracefulShutdown = async (signal) => {
 
     console.log('Cleanup completed. Exiting now.');
     process.exit(0);
-  } 
+  }
 };
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));

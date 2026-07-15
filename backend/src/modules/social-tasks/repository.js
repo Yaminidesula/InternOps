@@ -52,8 +52,6 @@ async function isTaskAssignedToUser(taskId, userId) {
   return res.rowCount > 0;
 }
 
-
-
 async function getAllInternEmails(limit = 500, offset = 0) {
   const res = await pool.query(
     `SELECT email
@@ -312,5 +310,4 @@ module.exports = {
   deleteProofImage,
   getAllInternEmails,
   getInternEmailCount,
-
 };
