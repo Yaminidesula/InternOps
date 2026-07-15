@@ -250,19 +250,19 @@ api.interceptors.response.use(
         processQueue(refreshErr);
 
         if (_authStore) {
-  _authStore.getState().logout();
-} else {
-  removeLegacyAuthStorage();
-  clearCsrfToken();
+          _authStore.getState().logout();
+        } else {
+          removeLegacyAuthStorage();
+          clearCsrfToken();
 
-  try {
-    if (typeof window !== 'undefined') {
-      window.localStorage.removeItem('user');
-    }
-  } catch {
-    /* ignore */
-  }
-}
+          try {
+            if (typeof window !== 'undefined') {
+              window.localStorage.removeItem('user');
+            }
+          } catch {
+            /* ignore */
+          }
+        }
 
         return Promise.reject(refreshErr);
       } finally {

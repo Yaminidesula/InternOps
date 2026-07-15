@@ -40,7 +40,7 @@ export default function Sessions() {
       // Clear in-memory auth state before redirect (#941)
       const store = useAuthStore.getState();
       store.logout();
-    navigate('/login', { replace: true });  
+      navigate('/login', { replace: true });
     },
   });
 
