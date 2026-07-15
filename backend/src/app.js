@@ -11,7 +11,10 @@ const metrics = require('./utils/metrics');
 const { initializeWebSocket } = require('./websocket');
 const noticesRoutes = require('./modules/notices/routes');
 const { getRedisStatus } = require('./config/redis');
-
+const { csrfMiddleware } = require('./middleware/csrf');
+const { sanitizationMiddleware } = require('./middleware/sanitize');
+const { createAuditLog } = require('./utils/audit');
+const { setupCronJobs } = require('./utils/cron');
 const app = Fastify({
   trustProxy: config.nodeEnv === 'production' ? true : 'loopback',
   logger:
@@ -40,7 +43,6 @@ app.get(
     },
   },
   async (req, reply) => {
-    const { getRedisStatus } = require('./config/redis');
     const redisStatus = getRedisStatus();
 
     if (process.env.NODE_ENV === 'test') {
@@ -111,7 +113,10 @@ app.get(
 );
 
 app.register(require('@fastify/cors'), {
-  origin: config.nodeEnv === 'production' ? config.corsOrigin : true,
+  origin:
+    config.nodeEnv === 'production'
+      ? config.corsOrigin
+      : 'http://localhost:5173',
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token'],
@@ -140,9 +145,7 @@ app.register(require('@fastify/rate-limit'), {
 
 app.register(require('@fastify/cookie'));
 
-const { csrfMiddleware } = require('./middleware/csrf');
-const { sanitizationMiddleware } = require('./middleware/sanitize');
-app.addHook('onRequest', csrfMiddleware);
+app.addHook('preHandler', csrfMiddleware);
 // Sanitize all string fields in body, query, and params using sanitize-html
 // (allowlist of zero tags) to prevent XSS. Runs after body parsing.
 app.addHook('preHandler', sanitizationMiddleware);
@@ -164,7 +167,17 @@ if (process.env.NODE_ENV !== 'test') {
       info: {
         title: 'InternOps API',
         version: '1.0.0',
+        description:
+          'All business routes are versioned under /api/v1/. Future breaking changes will be introduced under /api/v2/ alongside the existing version.',
       },
+      servers: [
+        { url: '/api/v1', description: 'Current stable API (v1)' },
+        {
+          url: '/api/v2',
+          description:
+            'Next API version (v2) — see CONTRIBUTING.md for migration guide',
+        },
+      ],
     },
   });
 
@@ -174,7 +187,12 @@ if (process.env.NODE_ENV !== 'test') {
 }
 
 // ---- API routes (delegated to dedicated router factory) ----
-app.register(require('./routes'), { prefix: '/api' });
+// v1 — stable; all existing clients target this prefix.
+app.register(require('./routes'), { prefix: '/api/v1' });
+// v2 — introduced alongside v1 so both are served concurrently.
+// Breaking changes land here; v1 receives Deprecation+Sunset headers
+// via the onSend hook in routes.js once V1_DEPRECATED=true is set.
+app.register(require('./routes.v2'), { prefix: '/api/v2' });
 
 app.get('/', async (req, reply) => {
   reply.redirect('/docs');
@@ -210,10 +228,8 @@ app.addHook('onRequest', async (request) => {
 app.addHook('onResponse', async (request, reply) => {
   metrics.observeHttpRequest(request, reply, request.startTime);
 
-  // Layer 3: Defensive hook - safely check for audit data using optional chaining
   if (!request?.auditOnResponse) return;
 
-  const { createAuditLog } = require('./utils/audit');
   try {
     await createAuditLog(request.auditOnResponse);
   } catch (err) {
@@ -313,7 +329,7 @@ app.setErrorHandler((error, request, reply) => {
 });
 
 if (process.env.NODE_ENV !== 'test') {
-  require('./utils/cron').setupCronJobs();
+  setupCronJobs();
 }
 
 const start = async () => {

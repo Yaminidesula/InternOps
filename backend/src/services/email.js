@@ -11,11 +11,12 @@ const log = pino(
 );
 
 const rateLimitMap = new Map();
-const bounceList = new Set();
+const bounceList = new Map();
 
 // Periodic cleanup to prevent memory leaks (#990, #948, #994, #944)
 const CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // every 5 minutes
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const BOUNCE_TTL_MS = 24 * 60 * 60 * 1000;
 setInterval(() => {
   const now = Date.now();
   for (const [email, timestamps] of rateLimitMap) {
@@ -23,9 +24,45 @@ setInterval(() => {
     if (fresh.length === 0) rateLimitMap.delete(email);
     else rateLimitMap.set(email, fresh);
   }
+
+  for (const [email, timestamp] of bounceList) {
+    if (now - timestamp >= BOUNCE_TTL_MS) {
+      bounceList.delete(email);
+    }
+  }
 }, CLEANUP_INTERVAL_MS).unref();
 
 const metrics = { sent: 0, failed: 0, bounced: 0, retried: 0 };
+
+// --- Email delivery queue (in-memory) ---
+const emailQueue = [];
+let queueProcessing = false;
+const queueMetrics = { queued: 0, processed: 0 };
+
+function enqueueEmailJob(jobFn) {
+  return new Promise((resolve, reject) => {
+    emailQueue.push({ jobFn, resolve, reject });
+    queueMetrics.queued++;
+    processQueue();
+  });
+}
+
+async function processQueue() {
+  if (queueProcessing) return; // already running, new job will be picked up in the loop
+  queueProcessing = true;
+  while (emailQueue.length > 0) {
+    const { jobFn, resolve, reject } = emailQueue.shift();
+    try {
+      const result = await jobFn();
+      queueMetrics.processed++;
+      resolve(result);
+    } catch (err) {
+      queueMetrics.processed++;
+      reject(err);
+    }
+  }
+  queueProcessing = false;
+}
 
 class EmailService {
   constructor() {
@@ -84,7 +121,13 @@ class EmailService {
   }
 
   _checkBounce(to) {
-    if (config.email.bounceCheckEnabled && bounceList.has(to)) {
+    const bouncedAt = bounceList.get(to);
+
+    if (
+      config.email.bounceCheckEnabled &&
+      bouncedAt &&
+      Date.now() - bouncedAt < BOUNCE_TTL_MS
+    ) {
       throw new Error(`Bounced address suppressed: ${to}`);
     }
   }
@@ -124,7 +167,22 @@ class EmailService {
       throw new Error('Missing required fields: to, subject');
     this._checkBounce(to);
     this._checkRateLimit(to);
+    enqueueEmailJob(() =>
+      this._deliver({ to, subject, template, data, html, text })
+    ).catch((err) => {
+      log.error(
+        { to, subject, err: err.message },
+        'Queued email ultimately failed after retries'
+      );
+    });
+    return {
+      queued: true,
+      to,
+      subject,
+    };
+  }
 
+  async _deliver({ to, subject, template, data, html, text }) {
     let htmlContent = html;
     let textContent = text;
 
@@ -173,7 +231,7 @@ class EmailService {
         const info = await transporter.sendMail(mailOptions);
         metrics.sent++;
         if (info.rejected && info.rejected.length > 0) {
-          info.rejected.forEach((addr) => bounceList.add(addr));
+          info.rejected.forEach((addr) => bounceList.set(addr, Date.now()));
           metrics.bounced += info.rejected.length;
         }
         return info;
@@ -189,7 +247,7 @@ class EmailService {
           'Email send attempt failed'
         );
         if (err.responseCode >= 500 || /55[0135]/.test(err.message)) {
-          bounceList.add(to);
+          bounceList.set(to, Date.now());
           metrics.bounced++;
           break;
         }
@@ -205,7 +263,7 @@ class EmailService {
   }
 
   async sendPasswordReset(email, resetToken) {
-    const resetLink = `${config.appUrl || 'http://localhost:5173'}/reset-password#token=${encodeURIComponent(resetToken)}`;
+    const resetLink = `${config.appUrl || 'http://localhost:5173'}/reset-password?token=${encodeURIComponent(resetToken)}`;
     return this.send({
       to: email,
       subject: 'InternOps - Password Reset Request',
@@ -233,8 +291,15 @@ class EmailService {
     });
   }
 
+  async _flushQueue() {
+    // waits until the queue has fully drained (test helper)
+    while (queueProcessing || emailQueue.length > 0) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+  }
+
   getMetrics() {
-    return { ...metrics };
+    return { ...metrics, ...queueMetrics, queueLength: emailQueue.length };
   }
 
   resetMetrics() {
@@ -249,7 +314,7 @@ class EmailService {
   }
 
   _trackBounce(address) {
-    bounceList.add(address);
+    bounceList.set(address, Date.now());
   }
 
   _clearBounceList() {

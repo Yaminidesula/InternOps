@@ -136,6 +136,12 @@ if (filesData.length > 5) {
       const writtenFiles = [];
 
       try {
+        if (!didComment && !didRepost && !didShare) {
+          return reply.status(400).send({
+            error: 'At least one engagement action must be selected.',
+          });
+        }
+
         for (const data of filesData) {
           const ext = path.extname(data.filename).toLowerCase();
           if (
@@ -174,11 +180,6 @@ if (filesData.length > 5) {
           }
         }
         throw error;
-      }
-      if (!didComment && !didRepost && !didShare) {
-        return reply.status(400).send({
-          error: 'At least one engagement action must be selected.',
-        });
       }
       const proof = await repo.submitProofWithImages(
         task_id,

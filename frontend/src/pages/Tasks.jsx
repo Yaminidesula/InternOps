@@ -1,4 +1,4 @@
-import { useState,useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Target,
@@ -30,6 +30,7 @@ const PLATFORM_ICON = {
 };
 
 const overdue = (d) => new Date(d) < new Date();
+
 
 // 💡 Extracted TaskCard to isolate state per task item
 function TaskCard({
@@ -312,18 +313,25 @@ function TaskCard({
   );
 }
 
+
 export default function Tasks() {
   const { user } = useAuthStore();
   const [page, setPage] = useState(1);
 const LIMIT = 10;
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
-  const [selectedTask, setSelectedTask] = useState(null);
+  const [selectedProofTaskId, setSelectedProofTaskId] = useState(null);
   const [notification, setNotification] = useState(null);
   const [draftFiles, setDraftFiles] = useState({
     taskId: null,
     files: [],
     previews: [],
+  });
+  const [selectedTask, setSelectedTask] = useState(null);
+  const [draftEngagement, setDraftEngagement] = useState({
+    didComment: false,
+    didRepost: false,
+    didShare: false,
   });
   const [deletingProofId, setDeletingProofId] = useState(null);
 
@@ -360,10 +368,10 @@ const LIMIT = 10;
 const tasks = data?.tasks ?? [];
 const totalPages = data?.totalPages ?? 1;
   const { data: proofs, refetch: refetchProofs } = useQuery({
-    queryKey: ['proofs', selectedTask],
+    queryKey: ['proofs', selectedProofTaskId],
     queryFn: () =>
-      api.get(`/proofs/task/${selectedTask}`).then((res) => res.data),
-    enabled: !!selectedTask,
+      api.get(`/proofs/task/${selectedProofTaskId}`).then((res) => res.data),
+    enabled: !!selectedProofTaskId,
   });
 
   const { data: myProofs } = useQuery({
@@ -381,9 +389,9 @@ const totalPages = data?.totalPages ?? 1;
         form.append('image', file);
       });
 
-      form.append('didComment', didComment);
-      form.append('didRepost', didRepost);
-      form.append('didShare', didShare);
+      form.append('didComment', String(!!didComment));
+      form.append('didRepost', String(!!didRepost));
+      form.append('didShare', String(!!didShare));
 
       return api.post('/proofs/submit', form, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -392,6 +400,11 @@ const totalPages = data?.totalPages ?? 1;
 
     onSuccess: (_, variables) => {
       setDraftFiles({ taskId: null, files: [], previews: [] });
+      setDraftEngagement({
+        didComment: false,
+        didRepost: false,
+        didShare: false,
+      });
       refetchProofs();
 
       queryClient.invalidateQueries({ queryKey: ['proofs', variables.taskId] });
@@ -399,23 +412,79 @@ const totalPages = data?.totalPages ?? 1;
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
       queryClient.invalidateQueries({ queryKey: ['myProofs'] });
     },
-  });
-  const verifyMutation = useMutation({
-    mutationFn: ({ proofId }) => api.patch(`/proofs/${proofId}/verify`),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['proofs', variables.taskId] });
+    onError: (error) => {
+      const errorMsg = error.response?.data?.error || 'Failed to submit proof';
+      showNotification(errorMsg);
     },
   });
-  const deleteMutation = useMutation({
-    mutationFn: ({ proofId }) => api.delete(`/proofs/${proofId}`),
-    onSuccess: (_, variables) => {
-      setDeletingProofId(null);
-      showNotification('Proof deleted successfully');
-      refetchProofs();
 
-      queryClient.invalidateQueries({ queryKey: ['proofs', variables.taskId] });
+  const verifyMutation = useMutation({
+    mutationFn: ({ proofId }) => {
+      if (!proofId) {
+        throw new Error('Cannot verify proof: proof ID is missing');
+      }
+
+      return api.patch(`/proofs/${proofId}/verify`);
+    },
+    onSuccess: (_, variables) => {
+      showNotification('Proof verified successfully');
+
+      queryClient.invalidateQueries({
+        queryKey: ['proofs', variables.taskId],
+      });
+      queryClient.invalidateQueries({ queryKey: ['proofs'] });
+    },
+    onError: (error) => {
+      const errorMsg =
+        error.response?.data?.error ||
+        error.message ||
+        'Could not verify proof. Please try again.';
+
+      showNotification(errorMsg);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: ({ proofId }) => {
+      if (!proofId) {
+        throw new Error('Cannot delete proof: proof ID is missing');
+      }
+
+      return api.delete(`/proofs/${proofId}`);
+    },
+    onSuccess: (_, variables) => {
+      showNotification('Proof deleted successfully');
+
+      queryClient.setQueryData(
+        ['proofs', variables.taskId],
+        (currentProofs) => {
+          if (!Array.isArray(currentProofs)) {
+            return currentProofs;
+          }
+
+          return currentProofs.filter(
+            (proof) => proof.id !== variables.proofId
+          );
+        }
+      );
+
+      queryClient.invalidateQueries({
+        queryKey: ['proofs', variables.taskId],
+      });
       queryClient.invalidateQueries({ queryKey: ['proofs'] });
       queryClient.invalidateQueries({ queryKey: ['myProofs'] });
+    },
+    onError: (error) => {
+      const errorMsg =
+        error.response?.data?.error ||
+        error.message ||
+        'Could not delete proof. Please try again.';
+
+      showNotification(errorMsg);
+    },
+    onSettled: () => {
+      // Always restore the Delete button after success or failure.
+      setDeletingProofId(null);
     },
   });
 
@@ -474,8 +543,6 @@ const totalPages = data?.totalPages ?? 1;
     setDraftFiles({ taskId, files, previews });
   };
 
-  const overdue = (d) => new Date(d) < new Date();
-
   return (
     <div className="animate-fade-in-up">
       {notification && (
@@ -528,7 +595,14 @@ const totalPages = data?.totalPages ?? 1;
       )}
 
       {isLoading ? (
-        <Spinner />
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+          {[1, 2, 3, 4].map((i) => (
+            <div
+              key={i}
+              className="p-5 md:p-6 rounded-2xl bg-slate-100 dark:bg-slate-800 animate-pulse h-48"
+            />
+          ))}
+        </div>
       ) : !tasks?.length ? (
         <EmptyState
           icon={<Target className="w-12 h-12 text-gray-400" />}
@@ -755,10 +829,14 @@ const totalPages = data?.totalPages ?? 1;
                       variant="outline"
                       className="rounded-2xl"
                       onClick={() =>
-                        setSelectedTask(selectedTask === t.id ? null : t.id)
+                        setSelectedProofTaskId(
+                          selectedProofTaskId === t.id ? null : t.id
+                        )
                       }
                     >
-                      {selectedTask === t.id ? 'Hide proofs' : 'View proofs'}
+                      {selectedProofTaskId === t.id
+                        ? 'Hide proofs'
+                        : 'View proofs'}
                     </Btn>
                   )}
 
@@ -779,29 +857,93 @@ const totalPages = data?.totalPages ?? 1;
                             />
                           ))}
                         </div>
+                        <div className="flex gap-4 text-sm">
+                          <label className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={draftEngagement.didComment}
+                              disabled={submitMutation.isPending}
+                              onChange={(e) =>
+                                setDraftEngagement({
+                                  ...draftEngagement,
+                                  didComment: e.target.checked,
+                                })
+                              }
+                            />
+                            Comment
+                          </label>
+
+                          <label className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={draftEngagement.didRepost}
+                              disabled={submitMutation.isPending}
+                              onChange={(e) =>
+                                setDraftEngagement({
+                                  ...draftEngagement,
+                                  didRepost: e.target.checked,
+                                })
+                              }
+                            />
+                            Repost
+                          </label>
+
+                          <label className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={draftEngagement.didShare}
+                              disabled={submitMutation.isPending}
+                              onChange={(e) =>
+                                setDraftEngagement({
+                                  ...draftEngagement,
+                                  didShare: e.target.checked,
+                                })
+                              }
+                            />
+                            Share
+                          </label>
+                        </div>
                         <div className="flex items-center gap-2">
                           <Btn
                             variant="outline"
                             className="text-sm rounded-2xl py-1.5"
-                            onClick={() =>
+                            onClick={() => {
                               setDraftFiles({
                                 taskId: null,
                                 files: [],
                                 previews: [],
-                              })
-                            }
+                              });
+                              setDraftEngagement({
+                                didComment: false,
+                                didRepost: false,
+                                didShare: false,
+                              });
+                            }}
                           >
                             Cancel
                           </Btn>
                           <Btn
                             variant="success"
                             className="text-sm rounded-2xl py-1.5 flex items-center gap-2"
-                            onClick={() =>
+                            onClick={() => {
+                              if (
+                                !draftEngagement.didComment &&
+                                !draftEngagement.didRepost &&
+                                !draftEngagement.didShare
+                              ) {
+                                showNotification(
+                                  'Please select at least one engagement action.'
+                                );
+                                return;
+                              }
                               submitMutation.mutate({
                                 taskId: t.id,
                                 files: draftFiles.files,
-                              })
-                            }
+                                didComment: draftEngagement.didComment,
+                                didRepost: draftEngagement.didRepost,
+                                didShare: draftEngagement.didShare,
+                              });
+                            }}
                             disabled={submitMutation.isPending}
                           >
                             {submitMutation.isPending && (
@@ -827,7 +969,7 @@ const totalPages = data?.totalPages ?? 1;
                     ))}
                 </div>
 
-                {selectedTask === t.id && (
+                {selectedProofTaskId === t.id && (
                   <div className="mt-5 border-t border-slate-200 dark:border-slate-700 pt-5 space-y-3 animate-fade-in">
                     <div className="flex items-center justify-between gap-3">
                       <h4 className="text-sm font-extrabold text-slate-800 dark:text-white">
@@ -935,11 +1077,24 @@ const totalPages = data?.totalPages ?? 1;
                               <Btn
                                 variant="success"
                                 className="rounded-2xl"
+
                                onClick={() => deleteMutation.mutate(p.id)
 }
+
+                                onClick={() =>
+                                  verifyMutation.mutate({
+                                    proofId: p.id,
+                                    taskId: t.id,
+                                  })
+                                }
+                                disabled={verifyMutation.isPending}
+
                               >
                                 <span className="flex items-center gap-1">
-                                  <CheckCircle className="w-4 h-4" /> Verify
+                                  <CheckCircle className="w-4 h-4" />
+                                  {verifyMutation.isPending
+                                    ? 'Verifying...'
+                                    : 'Verify'}
                                 </span>
                               </Btn>
                             )}
@@ -957,12 +1112,21 @@ const totalPages = data?.totalPages ?? 1;
                                   <Btn
                                     variant="danger"
                                     className="rounded-2xl py-1 px-3 text-xs bg-red-500 hover:bg-red-600 text-white border-transparent"
+
 onClick={() =>
   verifyMutation.mutate({
     proofId: p.id,
     taskId: t.id,
   })
 }
+
+                                    onClick={() =>
+                                      deleteMutation.mutate({
+                                        proofId: p.id,
+                                        taskId: t.id,
+                                      })
+                                    }
+
                                     disabled={deleteMutation.isPending}
                                   >
                                     {deleteMutation.isPending
