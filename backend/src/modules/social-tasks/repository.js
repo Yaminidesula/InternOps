@@ -56,8 +56,6 @@ async function isTaskAssignedToUser(taskId, userId) {
   );
 
   return res.rows.map((row) => row.email);
-}
-
 
 async function getAllInternEmails(limit = 500, offset = 0) {
   const res = await pool.query(
