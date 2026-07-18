@@ -1077,9 +1077,6 @@ export default function Tasks() {
                                 <Btn
                                   variant="success"
                                   className="rounded-2xl"
-
-                                  onClick={() => deleteMutation.mutate(p.id)}
-
                                   onClick={() =>
                                     verifyMutation.mutate({
                                       proofId: p.id,
@@ -1110,21 +1107,12 @@ export default function Tasks() {
                                     <Btn
                                       variant="danger"
                                       className="rounded-2xl py-1 px-3 text-xs bg-red-500 hover:bg-red-600 text-white border-transparent"
-
-                                      onClick={() =>
-                                        verifyMutation.mutate({
-                                          proofId: p.id,
-                                          taskId: t.id,
-                                        })
-                                      }
-
                                       onClick={() =>
                                         deleteMutation.mutate({
                                           proofId: p.id,
                                           taskId: t.id,
                                         })
                                       }
-
                                       disabled={deleteMutation.isPending}
                                     >
                                       {deleteMutation.isPending
